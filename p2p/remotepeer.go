@@ -7,6 +7,7 @@ package p2p
 
 import (
 	"fmt"
+	"github.com/aergoio/aergo/p2p/audit"
 	"sync"
 	"time"
 
@@ -94,6 +95,7 @@ type remotePeerImpl struct {
 	mf        moFactory
 	signer    msgSigner
 	metric    *metric.PeerMetric
+	audit     audit.PeerAuditor
 
 	stopChan chan struct{}
 
@@ -119,6 +121,10 @@ type remotePeerImpl struct {
 
 	s  net.Stream
 	rw MsgReadWriter
+}
+
+func (p *remotePeerImpl) OnExceed() {
+	p.goAwayMsg("penalty exceeded")
 }
 
 var _ RemotePeer = (*remotePeerImpl)(nil)
@@ -158,6 +164,7 @@ func newRemotePeer(meta PeerMeta, manageNum uint32, pm PeerManager, actor ActorS
 		panic("Failed to create remotepeer " + err.Error())
 	}
 
+	rPeer.audit = audit.NewPeerAuditor(DefaultPeerExceedThreshold, rPeer)
 	return rPeer
 }
 
@@ -280,6 +287,12 @@ func (p *remotePeerImpl) runRead() {
 			p.stop()
 			return
 		}
+		if !p.checkAudit(msg.Subprotocol()) {
+			p.logger.Info().Str(LogPeerName, p.Name()).Float64("score", p.audit.ScoreSum()).Msg("peer penalty score exceed")
+			p.stop()
+			return
+		}
+
 		if err = p.handleMsg(msg); err != nil {
 			p.logger.Error().Str(LogPeerName, p.Name()).Err(err).Msg("Failed to handle message")
 			p.stop()
@@ -331,6 +344,20 @@ func (p *remotePeerImpl) handleMsg(msg Message) error {
 
 	handler.postHandle(msg, payload)
 	return nil
+}
+
+func (p *remotePeerImpl) checkAudit(protocol SubProtocol) bool {
+	switch protocol {
+	case GetBlockHeadersRequest, GetAncestorRequest, GetBlocksRequest, GetHashByNoRequest, GetHashesRequest :
+		p.audit.AddScore(audit.ShortTerm, ShortBlockQueryScore)
+	case GetTXsRequest :
+		p.audit.AddScore(audit.ShortTerm, ShortTxQueryScore)
+	case PingRequest, AddressesRequest :
+		p.audit.AddScore(audit.ShortTerm, ShortMiscScore)
+	default:
+		p.audit.AddScore(audit.ShortTerm, ShortMiscScore)
+	}
+	return true
 }
 
 // Stop stops aPeer works
@@ -529,8 +556,4 @@ func (p *remotePeerImpl) updateTxCache(hashes []types.TxID) []types.TxID {
 
 func (p *remotePeerImpl) updateLastNotice(blkHash []byte, blkNumber uint64) {
 	p.lastNotice = &LastBlockStatus{time.Now(), blkHash, blkNumber}
-}
-
-func (p *remotePeerImpl) sendGoAway(msg string) {
-	// TODO: send goaway message and close connection
 }

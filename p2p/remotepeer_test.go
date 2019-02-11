@@ -14,13 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aergoio/aergo/p2p/p2putil"
-	"github.com/gofrs/uuid"
-	"github.com/golang/protobuf/proto"
-
 	"github.com/aergoio/aergo-lib/log"
 	"github.com/aergoio/aergo/message"
+	"github.com/aergoio/aergo/p2p/p2putil"
 	"github.com/aergoio/aergo/types"
+	"github.com/gofrs/uuid"
+	"github.com/golang/protobuf/proto"
 	"github.com/libp2p/go-libp2p-peer"
 	"github.com/libp2p/go-libp2p-protocol"
 	"github.com/stretchr/testify/assert"
@@ -407,7 +406,7 @@ func TestRemotePeerImpl_UpdateBlkCache(t *testing.T) {
 			for _, hash := range test.inCache {
 				target.blkHashCache.Add(hash, true)
 			}
-			target.lastNotice = &LastBlockStatus{BlockHash: test.prevLastBlk[:], BlockNumber:0, CheckTime:time.Now()}
+			target.lastNotice = &LastBlockStatus{BlockHash: test.prevLastBlk[:], BlockNumber: 0, CheckTime: time.Now()}
 			actual := target.updateBlkCache(test.hash[:], 0)
 			assert.Equal(t, test.expected, actual)
 			assert.True(t, bytes.Equal(test.hash[:], target.LastNotice().BlockHash))
@@ -541,3 +540,57 @@ func TestRemotePeerImpl_GetReceiver(t *testing.T) {
 		})
 	}
 }
+
+func Test_remotePeerImpl_runRead(t *testing.T) {
+	tests := []struct {
+		name   string
+	}{
+		{"T"},
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockActorServ := new(MockActorService)
+			mockPeerManager := new(MockPeerManager)
+			mockSigner := new(mockMsgSigner)
+			mockMF := new(MockMoFactory)
+			mockRW := new(MockMsgReadWriter)
+			handlers := make(map[SubProtocol]MessageHandler)
+			handlers[GetHashesRequest] = &dummyHandler{}
+
+			dummyMsg := &V030Message{subProtocol:GetHashesRequest}
+			mockRW.On("ReadMsg").Return(dummyMsg, nil)
+			mockMF.On("newMsgRequestOrder", false, GoAway, mock.Anything).Return(&pbRequestOrder{})
+			p := newRemotePeer(sampleMeta, 0, mockPeerManager, mockActorServ, logger, mockMF, mockSigner, nil, mockRW)
+			p.handlers = handlers
+
+			go p.runRead()
+
+			time.Sleep(time.Second>>2)
+			mockMF.AssertCalled(t,"newMsgRequestOrder", false, GoAway, mock.Anything)
+		})
+	}
+}
+
+type dummyHandler struct {
+
+}
+
+func (*dummyHandler) parsePayload([]byte) (proto.Message, error) {
+	return nil, nil
+}
+
+func (*dummyHandler) checkAuth(msgHeader Message, msgBody proto.Message) error {
+	return nil
+}
+
+func (*dummyHandler) handle(msgHeader Message, msgBody proto.Message) {
+	// Do nothing
+}
+
+func (*dummyHandler) preHandle() {
+}
+
+func (*dummyHandler) postHandle(msgHeader Message, msgBody proto.Message) {
+}
+
