@@ -165,3 +165,9 @@ type GetHashByNoRsp struct {
 	BlockHash BlockHash
 	Err       error
 }
+
+// SenderContext is additional information about a remote peer causing inter-actor message
+type SenderContext struct {
+	PeerID       peer.ID
+	ManageNumber uint32
+}

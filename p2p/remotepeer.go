@@ -209,6 +209,7 @@ func (p *remotePeerImpl) runPeer() {
 
 	txNoticeTicker := time.NewTicker(txNoticeInterval)
 
+
 	// peer state is changed to RUNNIG after all sub goroutine is ready, and to STOPPED before fll sub goroutine is stopped.
 	p.state.SetAndGet(types.RUNNING)
 READNOPLOOP:
@@ -355,7 +356,7 @@ func (p *remotePeerImpl) checkAudit(protocol SubProtocol) bool {
 	case PingRequest, AddressesRequest :
 		p.audit.AddScore(audit.ShortTerm, ShortMiscScore)
 	default:
-		p.audit.AddScore(audit.ShortTerm, ShortMiscScore)
+		// notice or response is not added
 	}
 	return true
 }

@@ -18,19 +18,20 @@ func NewTxVerifier(p *MemPool) *TxVerifier {
 //Receive actor message
 func (s *TxVerifier) Receive(context actor.Context) {
 	switch msg := context.Message().(type) {
-	case *types.Tx:
+	case *message.MemPoolPut:
+		tx := msg.Tx
 		var err error
-		if proto.Size(msg) > txMaxSize {
+		if proto.Size(tx) > txMaxSize {
 			err = types.ErrTxSizeExceedLimit
-		} else if s.mp.exist(msg.GetHash()) != nil {
+		} else if s.mp.exist(tx.GetHash()) != nil {
 			err = types.ErrTxAlreadyInMempool
 		} else {
-			tx := types.NewTransaction(msg)
+			tx := types.NewTransaction(tx)
 			err = s.mp.verifyTx(tx)
 			if err == nil {
 				err = s.mp.put(tx)
 			}
 		}
-		context.Respond(&message.MemPoolPutRsp{Err: err})
+		context.Respond(&message.MemPoolPutRsp{Err: err, Sender:msg.Sender})
 	}
 }

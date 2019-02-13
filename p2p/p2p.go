@@ -6,6 +6,7 @@
 package p2p
 
 import (
+	"github.com/aergoio/aergo-actor/router"
 	"github.com/aergoio/aergo/p2p/metric"
 	"github.com/aergoio/aergo/p2p/p2putil"
 	"os"
@@ -47,6 +48,7 @@ type P2P struct {
 	signer msgSigner
 	ca     types.ChainAccessor
 
+	auditor  *actor.PID
 	mutex sync.Mutex
 }
 
@@ -140,6 +142,8 @@ func NewP2P(cfg *config.Config, chainsvc *chain.ChainService) *P2P {
 func (p2ps *P2P) BeforeStart() {}
 
 func (p2ps *P2P) AfterStart() {
+	p2ps.auditor = actor.Spawn(router.NewRoundRobinPool(1).WithFunc(p2ps.ReceiveResp))
+
 	p2ps.mutex.Lock()
 
 	nt := p2ps.nt
@@ -162,6 +166,9 @@ func (p2ps *P2P) BeforeStop() {
 	nt := p2ps.nt
 	p2ps.mutex.Unlock()
 	nt.Stop()
+	if p2ps.auditor != nil {
+		p2ps.auditor.Stop()
+	}
 }
 
 // Statistics show statistic information of p2p module. NOTE: It it not implemented yet
@@ -249,8 +256,14 @@ func (p2ps *P2P) Receive(context actor.Context) {
 	case *message.NotifyNewTransactions:
 		p2ps.NotifyNewTX(*msg)
 	case *message.AddBlockRsp:
+		if msg.Err != nil {
+			p2ps.auditor.Request(msg, context.Sender())
+		}
 		// do nothing for now. just for prevent deadletter
-
+	case *message.MemPoolPutRsp:
+		if msg.Err != nil {
+			p2ps.auditor.Request(msg, context.Sender())
+		}
 	case *message.GetPeers:
 		peers := p2ps.pm.GetPeerAddresses()
 		context.Respond(&message.GetPeersRsp{Peers: peers})
@@ -371,5 +384,16 @@ func (p2ps *P2P) CreateHSHandler(outbound bool, pm PeerManager, actor ActorServi
 		return &OutboundHSHandler{PeerHandshaker: handshakeHandler}
 	} else {
 		return &InboundHSHandler{PeerHandshaker: handshakeHandler}
+	}
+}
+
+func (p2ps *P2P) ReceiveResp(context actor.Context) {
+	rawMsg := context.Message()
+	switch msg := rawMsg.(type) {
+	case *message.AddBlockRsp:
+		p2ps.Logger.Debug().Err(msg.Err).Msg("got add block failed ")
+	// do nothing for now. just for prevent deadletter
+	case *message.MemPoolPutRsp:
+		p2ps.Logger.Debug().Err(msg.Err).Msg("got put tx failed ")
 	}
 }

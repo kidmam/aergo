@@ -66,7 +66,7 @@ func (sm *syncManager) HandleBlockProducedNotice(peer RemotePeer, block *types.B
 		sm.logger.Warn().Str(LogBlkHash, hash.String()).Str(LogPeerName,peer.Name()).Msg("Duplacated blockProduced notice")
 		return
 	}
-	sm.actor.SendRequest(message.ChainSvc, &message.AddBlock{PeerID: peer.ID(), Block: block, Bstate: nil})
+	sm.actor.SendRequest(message.ChainSvc, &message.AddBlock{PeerID: peer.ID(), Block: block, Bstate: nil, Sender:&message.SenderContext{peer.ID(), peer.ManageNumber()}})
 
 }
 
@@ -111,7 +111,7 @@ func (sm *syncManager) HandleGetBlockResponse(peer RemotePeer, msg Message, resp
 		return
 	}
 	block := blocks[0]
-	sm.actor.SendRequest(message.ChainSvc, &message.AddBlock{PeerID: peerID, Block: block, Bstate: nil})
+	sm.actor.SendRequest(message.ChainSvc, &message.AddBlock{PeerID: peerID, Block: block, Bstate: nil, Sender:&message.SenderContext{peer.ID(), peer.ManageNumber()}})
 }
 
 func (sm *syncManager) HandleNewTxNotice(peer RemotePeer, hashes []types.TxID, data *types.NewTransactionsNotice) {

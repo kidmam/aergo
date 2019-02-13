@@ -454,6 +454,7 @@ func (cm *ChainManager) Receive(context actor.Context) {
 			BlockNo:   block.GetHeader().GetBlockNo(),
 			BlockHash: block.BlockHash(),
 			Err:       err,
+			Sender:    msg.Sender,
 		}
 
 		context.Respond(&rsp)
