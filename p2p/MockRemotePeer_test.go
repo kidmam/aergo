@@ -2,6 +2,7 @@
 package p2p
 
 import (
+	"github.com/aergoio/aergo/p2p/audit"
 	"github.com/stretchr/testify/mock"
 	"time"
 )
@@ -102,6 +103,10 @@ func (_m *MockRemotePeer) updateTxCache(hashes []types.TxID) []types.TxID {
 	}
 
 	return r0
+}
+
+func (_m *MockRemotePeer) AddPenalty(penalty audit.Penalty) {
+	_m.Called(penalty)
 }
 
 // updateBlkCache provides a mock function with given fields: hash

@@ -447,6 +447,7 @@ func (cm *ChainManager) Receive(context actor.Context) {
 		}
 		err := cm.addBlock(block, bstate, msg.PeerID)
 		if err != nil {
+			err = checkToBlame(err)
 			logger.Error().Err(err).Uint64("no", block.GetHeader().BlockNo).Str("hash", block.ID()).Msg("failed to add block")
 		}
 
@@ -673,4 +674,22 @@ func (cw *ChainWorker) Receive(context actor.Context) {
 		debug := fmt.Sprintf("[%s] Missed message. (%v) %s", cw.name, reflect.TypeOf(msg), msg)
 		logger.Debug().Msg(debug)
 	}
+}
+
+func checkToBlame(err error) error {
+	if _, ok := err.(message.BlamableError) ; ok {
+		return err
+	}
+
+	switch err {
+	case ErrBlockCachedErrLRU :
+		return message.NewBlamableWrapper(message.Severe, err)
+	case ErrBlockExist :
+		return message.NewBlamableWrapper(message.Tiny, err)
+	case ErrBlockOrphan :
+		return message.NewBlamableWrapper(message.Small, err)
+	default:
+		return message.NewBlamableWrapper(message.Small, err)
+	}
+	return err
 }

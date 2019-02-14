@@ -7,6 +7,7 @@ package p2p
 
 import (
 	"github.com/aergoio/aergo-actor/router"
+	"github.com/aergoio/aergo/p2p/audit"
 	"github.com/aergoio/aergo/p2p/metric"
 	"github.com/aergoio/aergo/p2p/p2putil"
 	"os"
@@ -388,12 +389,29 @@ func (p2ps *P2P) CreateHSHandler(outbound bool, pm PeerManager, actor ActorServi
 }
 
 func (p2ps *P2P) ReceiveResp(context actor.Context) {
+	var peer RemotePeer
+	var penalty audit.Penalty
+
 	rawMsg := context.Message()
 	switch msg := rawMsg.(type) {
 	case *message.AddBlockRsp:
 		p2ps.Logger.Debug().Err(msg.Err).Msg("got add block failed ")
+		var found bool
+		peer, found = p2ps.pm.GetPeer(msg.Sender.PeerID)
+		if !found { // unknown or already closed
+			return
+		}
+		penalty = audit.GetPenaltyScore(msg.Err)
+		peer.AddPenalty(penalty)
 	// do nothing for now. just for prevent deadletter
 	case *message.MemPoolPutRsp:
 		p2ps.Logger.Debug().Err(msg.Err).Msg("got put tx failed ")
+		var found bool
+		peer, found = p2ps.pm.GetPeer(msg.Sender.PeerID)
+		if !found { // unknown or already closed
+			return
+		}
+		penalty = audit.GetPenaltyScore(msg.Err)
+		peer.AddPenalty(penalty)
 	}
 }

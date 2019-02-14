@@ -40,6 +40,7 @@ func TestSyncManager_HandleBlockProducedNotice(t *testing.T) {
 			mockPeer := new(MockRemotePeer)
 			mockPeer.On("ID").Return(sampleMeta.ID)
 			mockPeer.On("Name").Return("16..aadecf@1")
+			mockPeer.On("ManageNumber").Return(uint32(1))
 
 			target := newSyncManager(mockActor, mockPM, logger).(*syncManager)
 			if test.put != nil  {
@@ -229,6 +230,7 @@ func TestSyncManager_HandleGetBlockResponse(t *testing.T) {
 			mockPeer.On("ID").Return(sampleMeta.ID)
 			mockPeer.On("MF").Return(mockMF)
 			mockPeer.On("sendMessage", mock.Anything)
+			mockPeer.On("ManageNumber").Return(uint32(1))
 
 			dummyMsgID := NewMsgID()
 			target := newSyncManager(mockActor, mockPM, logger).(*syncManager)

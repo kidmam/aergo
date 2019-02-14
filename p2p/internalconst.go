@@ -5,7 +5,9 @@
 
 package p2p
 
-import "time"
+import (
+	"time"
+)
 
 // constants for inter-communication of aergosvr
 const (
@@ -72,17 +74,3 @@ const (
 	DefaultPeerIDExt   = ".id"
 )
 
-// constants for peer audit
-const (
-	DefaultPeerExceedThreshold = 100000.0
-
-	// Shortterm is mainly for frequency of query
-	// too frequent query request will harm server
-	ShortBlockQueryScore = 1000.0
-	ShortTxQueryScore = 1000.0
-	ShortMiscScore = 10000.0
-
-	// malformed message is permanent penalty
-	PermMalformedHash = 100001.0
-	PermWrongSign = 100001.0
-)

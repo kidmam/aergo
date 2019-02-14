@@ -57,6 +57,8 @@ type RemotePeer interface {
 	// updateLastNotice change estimate of the last status of remote peer
 	updateLastNotice(blkHash []byte, blkNumber uint64)
 
+	AddPenalty(penalty audit.Penalty)
+
 	// TODO
 	MF() moFactory
 }
@@ -164,7 +166,7 @@ func newRemotePeer(meta PeerMeta, manageNum uint32, pm PeerManager, actor ActorS
 		panic("Failed to create remotepeer " + err.Error())
 	}
 
-	rPeer.audit = audit.NewPeerAuditor(DefaultPeerExceedThreshold, rPeer)
+	rPeer.audit = audit.NewPeerAuditor(audit.DefaultPeerExceedThreshold, rPeer)
 	return rPeer
 }
 
@@ -208,7 +210,6 @@ func (p *remotePeerImpl) runPeer() {
 	go p.runRead()
 
 	txNoticeTicker := time.NewTicker(txNoticeInterval)
-
 
 	// peer state is changed to RUNNIG after all sub goroutine is ready, and to STOPPED before fll sub goroutine is stopped.
 	p.state.SetAndGet(types.RUNNING)
@@ -350,11 +351,11 @@ func (p *remotePeerImpl) handleMsg(msg Message) error {
 func (p *remotePeerImpl) checkAudit(protocol SubProtocol) bool {
 	switch protocol {
 	case GetBlockHeadersRequest, GetAncestorRequest, GetBlocksRequest, GetHashByNoRequest, GetHashesRequest :
-		p.audit.AddScore(audit.ShortTerm, ShortBlockQueryScore)
+		p.audit.AddPenalty(audit.PenaltyTiny)
 	case GetTXsRequest :
-		p.audit.AddScore(audit.ShortTerm, ShortTxQueryScore)
+		p.audit.AddPenalty(audit.PenaltyTiny)
 	case PingRequest, AddressesRequest :
-		p.audit.AddScore(audit.ShortTerm, ShortMiscScore)
+		// TODO ping or address is add only if excessively frequent requests
 	default:
 		// notice or response is not added
 	}
@@ -558,3 +559,9 @@ func (p *remotePeerImpl) updateTxCache(hashes []types.TxID) []types.TxID {
 func (p *remotePeerImpl) updateLastNotice(blkHash []byte, blkNumber uint64) {
 	p.lastNotice = &LastBlockStatus{time.Now(), blkHash, blkNumber}
 }
+
+func (p *remotePeerImpl) AddPenalty(penalty audit.Penalty) {
+	p.logger.Debug().Str(LogPeerName, p.Name()).Str("penalty",penalty.String()).Msg("add penalty")
+	p.audit.AddPenalty(penalty)
+}
+

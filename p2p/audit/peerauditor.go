@@ -11,9 +11,10 @@ import (
 )
 
 type PeerAuditor interface {
-	AddScore(category AuditCategory, score float64) bool
+	AddPenalty(penalty Penalty) bool
+	AddScore(category PenaltyCategory, score float64) bool
 	Threshold() float64
-	CurrentScore(category AuditCategory) float64
+	CurrentScore(category PenaltyCategory) float64
 	ScoreSum() float64
 }
 
@@ -33,10 +34,14 @@ type DefaultAuditor struct {
 }
 
 func NewPeerAuditor(threshold float64, l ExceedListener) *DefaultAuditor {
-	return &DefaultAuditor{threshold:threshold, exceedListener:l, longScore:NewExponentDecayValue(900), shortScore:NewExponentDecayValue(15)}
+	return &DefaultAuditor{threshold:threshold, exceedListener:l, longScore:NewExponentDecayValue(LongTermMLT), shortScore:NewExponentDecayValue(ShortTermMLT)}
 }
 
-func (a *DefaultAuditor) AddScore(category AuditCategory, score float64) bool {
+func  (a *DefaultAuditor) AddPenalty(penalty Penalty) bool {
+	return a.AddScore(penalty.category, float64(penalty.score))
+}
+
+func (a *DefaultAuditor) AddScore(category PenaltyCategory, score float64) bool {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	if a.exceed {
@@ -65,7 +70,7 @@ func (a *DefaultAuditor) Threshold() float64 {
 	return a.threshold
 }
 
-func (a *DefaultAuditor) CurrentScore(category AuditCategory) float64 {
+func (a *DefaultAuditor) CurrentScore(category PenaltyCategory) float64 {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	now := time.Now().Unix()

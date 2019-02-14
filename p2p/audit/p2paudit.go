@@ -5,10 +5,24 @@
 
 package audit
 
-type AuditCategory int32
+import "fmt"
+
+type PenaltyCategory int32
+type PenaltyPoint float64
 
 const (
-	ShortTerm AuditCategory = iota
+	ShortTerm PenaltyCategory = iota
 	LongTerm
 	Permanent
 )
+
+//go:generate stringer -type=PenaltyCategory
+
+type Penalty struct {
+	category PenaltyCategory
+	score    PenaltyPoint
+}
+
+func (p Penalty) String() string {
+	return fmt.Sprintf("%v/%f",p.category,p.score)
+}

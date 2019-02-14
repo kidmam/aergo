@@ -17,7 +17,7 @@ func TestDefaultAuditor_AddScore(t *testing.T) {
 		threshold      float64
 	}
 	type args struct {
-		category AuditCategory
+		category PenaltyCategory
 		score    float64
 		count    int
 		interval time.Duration
