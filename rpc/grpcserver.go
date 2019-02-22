@@ -33,6 +33,11 @@ var (
 	logger = log.NewLogger("rpc")
 )
 
+type EventStream struct {
+	filter *types.FilterInfo
+	stream types.AergoRPCService_ListEventStreamServer
+}
+
 // AergoRPCService implements GRPC server which is defined in rpc.proto
 type AergoRPCService struct {
 	hub         *component.ComponentHub
@@ -44,6 +49,9 @@ type AergoRPCService struct {
 	blockStream             map[uint32]types.AergoRPCService_ListBlockStreamServer
 	blockMetadataStreamLock sync.RWMutex
 	blockMetadataStream     map[uint32]types.AergoRPCService_ListBlockMetadataStreamServer
+
+	eventStreamLock sync.RWMutex
+	eventStream     map[*EventStream]*EventStream
 }
 
 // FIXME remove redundant constants
@@ -767,9 +775,9 @@ func (rpc *AergoRPCService) VerifyTX(ctx context.Context, in *types.Tx) (*types.
 }
 
 // GetPeers handle rpc request getpeers
-func (rpc *AergoRPCService) GetPeers(ctx context.Context, in *types.Empty) (*types.PeerList, error) {
+func (rpc *AergoRPCService) GetPeers(ctx context.Context, in *types.PeersParams) (*types.PeerList, error) {
 	result, err := rpc.hub.RequestFuture(message.P2PSvc,
-		&message.GetPeers{}, halfMinute, "rpc.(*AergoRPCService).GetPeers").Result()
+		&message.GetPeers{in.NoHidden,in.ShowSelf}, halfMinute, "rpc.(*AergoRPCService).GetPeers").Result()
 	if err != nil {
 		return nil, err
 	}
@@ -778,10 +786,10 @@ func (rpc *AergoRPCService) GetPeers(ctx context.Context, in *types.Empty) (*typ
 		return nil, status.Errorf(codes.Internal, "internal type (%v) error", reflect.TypeOf(result))
 	}
 
-	ret := &types.PeerList{Peers: []*types.Peer{}}
+	ret := &types.PeerList{Peers: make([]*types.Peer,0, len(rsp.Peers))}
 	for _, pi := range rsp.Peers {
 		blkNotice := &types.NewBlockNotice{BlockHash: pi.LastBlockHash, BlockNo: pi.LastBlockNumber}
-		peer := &types.Peer{Address: pi.Addr, State: int32(pi.State), Bestblock: blkNotice, LashCheck: pi.CheckTime.UnixNano(), Hidden: pi.Hidden}
+		peer := &types.Peer{Address: pi.Addr, State: int32(pi.State), Bestblock: blkNotice, LashCheck: pi.CheckTime.UnixNano(), Hidden: pi.Hidden, Selfpeer:pi.Self}
 		ret.Peers = append(ret.Peers, peer)
 	}
 
@@ -931,4 +939,63 @@ func toTimestamp(time time.Time) *timestamp.Timestamp {
 
 func fromTimestamp(timestamp *timestamp.Timestamp) time.Time {
 	return time.Unix(timestamp.Seconds, int64(timestamp.Nanos))
+}
+
+func (rpc *AergoRPCService) ListEventStream(in *types.FilterInfo, stream types.AergoRPCService_ListEventStreamServer) error {
+	err := in.ValidateCheck(0)
+	if err != nil {
+		return err
+	}
+	_, err = in.GetExArgFilter()
+	if err != nil {
+		return err
+	}
+	rpc.eventStreamLock.Lock()
+	eventStream := &EventStream{in, stream}
+	rpc.eventStream[eventStream] = eventStream
+	rpc.eventStreamLock.Unlock()
+
+	for {
+		select {
+		case <-eventStream.stream.Context().Done():
+			rpc.eventStreamLock.Lock()
+			delete(rpc.eventStream, eventStream)
+			rpc.eventStreamLock.Unlock()
+			return nil
+		}
+	}
+}
+
+func (rpc *AergoRPCService) BroadcastToEventStream(events []*types.Event) error {
+	var err error
+	rpc.eventStreamLock.RLock()
+	defer rpc.eventStreamLock.RUnlock()
+
+	for _, es := range rpc.eventStream {
+		if es != nil {
+			argFilter, _ := es.filter.GetExArgFilter()
+			for _, event := range events {
+				if event.Filter(es.filter, argFilter) {
+					err = es.stream.Send(event)
+				}
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (rpc *AergoRPCService) ListEvents(ctx context.Context, in *types.FilterInfo) (*types.EventList, error) {
+	result, err := rpc.hub.RequestFuture(message.ChainSvc,
+		&message.ListEvents{Filter: in}, defaultActorTimeout, "rpc.(*AergoRPCService).ListEvents").Result()
+	if err != nil {
+		return nil, err
+	}
+	rsp, ok := result.(*message.ListEventsRsp)
+	if !ok {
+		return nil, status.Errorf(codes.Internal, "internal type (%v) error", reflect.TypeOf(result))
+	}
+	return &types.EventList{Events: rsp.Events}, rsp.Err
 }

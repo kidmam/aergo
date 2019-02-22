@@ -9,6 +9,7 @@ import (
 	"github.com/aergoio/aergo-actor/router"
 	"github.com/aergoio/aergo/p2p/audit"
 	"github.com/aergoio/aergo/p2p/metric"
+	"github.com/aergoio/aergo/p2p/p2pcommon"
 	"github.com/aergoio/aergo/p2p/p2putil"
 	"os"
 	"path/filepath"
@@ -159,9 +160,10 @@ func (p2ps *P2P) AfterStart() {
 
 // BeforeStop is called before actor hub stops. it finishes underlying peer manager
 func (p2ps *P2P) BeforeStop() {
+	p2ps.Logger.Debug().Msg("stopping p2p actor.")
 	p2ps.mm.Stop()
 	if err := p2ps.pm.Stop(); err != nil {
-		p2ps.Logger.Warn().Err(err).Msg("Erro on stopping peerManager")
+		p2ps.Logger.Warn().Err(err).Msg("Error on stopping peerManager")
 	}
 	p2ps.mutex.Lock()
 	nt := p2ps.nt
@@ -266,7 +268,7 @@ func (p2ps *P2P) Receive(context actor.Context) {
 			p2ps.auditor.Request(msg, context.Sender())
 		}
 	case *message.GetPeers:
-		peers := p2ps.pm.GetPeerAddresses()
+		peers := p2ps.pm.GetPeerAddresses(msg.NoHidden,msg.ShowSelf)
 		context.Respond(&message.GetPeersRsp{Peers: peers})
 	case *message.GetSyncAncestor:
 		p2ps.GetSyncAncestor(msg.ToWhom, msg.Hashes)
@@ -292,7 +294,7 @@ func (p2ps *P2P) Receive(context actor.Context) {
 // TODO need refactoring. this code is copied from subprotcoladdrs.go
 func (p2ps *P2P) checkAndAddPeerAddresses(peers []*types.PeerAddress) {
 	selfPeerID := p2ps.pm.SelfNodeID()
-	peerMetas := make([]PeerMeta, 0, len(peers))
+	peerMetas := make([]p2pcommon.PeerMeta, 0, len(peers))
 	for _, rPeerAddr := range peers {
 		rPeerID := peer.ID(rPeerAddr.PeerID)
 		if selfPeerID == rPeerID {
@@ -301,7 +303,7 @@ func (p2ps *P2P) checkAndAddPeerAddresses(peers []*types.PeerAddress) {
 		if p2putil.CheckAdddressType(rPeerAddr.Address) == p2putil.AddressTypeError {
 			continue
 		}
-		meta := FromPeerAddress(rPeerAddr)
+		meta := p2pcommon.FromPeerAddress(rPeerAddr)
 		peerMetas = append(peerMetas, meta)
 	}
 	if len(peerMetas) > 0 {

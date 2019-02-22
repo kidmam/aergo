@@ -166,3 +166,13 @@ type GetAncestorRsp struct {
 	Ancestor *types.BlockInfo
 	Err      error
 }
+
+type ListEvents struct {
+	Filter *types.FilterInfo
+}
+
+// response to p2p for GetAncestor message
+type ListEventsRsp struct {
+	Events []*types.Event
+	Err    error
+}

@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"github.com/aergoio/aergo-lib/log"
 	"github.com/aergoio/aergo/message"
+	"github.com/aergoio/aergo/p2p/p2pcommon"
 	"github.com/aergoio/aergo/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -232,7 +233,7 @@ func TestSyncManager_HandleGetBlockResponse(t *testing.T) {
 			mockPeer.On("sendMessage", mock.Anything)
 			mockPeer.On("ManageNumber").Return(uint32(1))
 
-			dummyMsgID := NewMsgID()
+			dummyMsgID := p2pcommon.NewMsgID()
 			target := newSyncManager(mockActor, mockPM, logger).(*syncManager)
 
 			msg := &V030Message{originalID:dummyMsgID}
